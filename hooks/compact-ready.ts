@@ -471,11 +471,17 @@ const wanted = (text: string): QueueKind => (isWordTurn(text) ? 'compact' : SKIL
 
 const bindTurn = (rec: RunRecord, text: string, turnId: string, now: number): boolean => {
   // among the waiting entries the text fits, the longest head wins (a two-line message over the
-  // word that merely begins it), then the entry of the turn's own kind, then the oldest
+  // word that merely begins it), then the entry of the turn's own kind, then the oldest; skill
+  // entries do not read their head (any fits any skill turn), so only the first of them competes
   const want = wanted(text)
   let i = -1
+  let skillSeen = false
   rec.queue.forEach((q, n) => {
     if (q.turnId !== undefined || !matches(q, text)) return
+    if (q.kind === 'skill') {
+      if (skillSeen) return
+      skillSeen = true
+    }
     const best = i < 0 ? undefined : rec.queue[i]
     if (best === undefined || q.textHead.length > best.textHead.length
       || (q.textHead.length === best.textHead.length && q.kind === want && best.kind !== want)) i = n

@@ -1435,6 +1435,34 @@ test('R14 a handoff saved after a compaction confirmed during the skill turn is 
   expect(after).not.toContain('which handoff')
 })
 
+test('R15 two skill calls waiting in the queue bind in order: the first turn never takes the second entry', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await submit($, '/compact-ready', { command: SKILL_CMD_SHORT })
+  await submit($, '/compact-ready:compact-ready', { command: SKILL_CMD })
+  const a = await turnStart($, '/compact-ready')
+  expect(h.rec().queue.filter((q) => q.turnId === undefined)).toHaveLength(1)
+  await turnEnd($, a, ccAnswer('tasks/one.md'))
+  expect(h.rec().handoff?.path).toBe('tasks/one.md')
+  const b = await turnStart($, '/compact-ready:compact-ready')
+  await turnEnd($, b, ccAnswer('tasks/two.md'))
+  expect(h.rec().handoff?.path).toBe('tasks/two.md')
+  expect(h.rec().queue).toHaveLength(0)
+})
+
+test('R16 at equal heads the entry of the turn own kind wins', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await skillTurn($, ccAnswer())
+  // both heads are the same 80 characters: 65 spaces and the word
+  const pad = ' '.repeat(65)
+  await submit($, pad + 'context-compact more')
+  const r = await submit($, pad + 'context-compact')
+  expect(hasNote(r.context ?? [], COMPACT_W)).toBe(true)
+  await turn($, pad + 'context-compact\n[added by the engine]')
+  expect(h.runs.filter((e) => e.command === 'compact')).toHaveLength(1)
+})
+
 test('R11 within one run the first empty measurement confirms the word after a pause longer than two minutes', async ($, on) => {
   const h = harness($, on)
   h.usage({ tokens: 300000, threshold: THRESHOLD })
