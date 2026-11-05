@@ -10,7 +10,7 @@ The text of your messages, only to check whether a message is exactly the word `
 
 ## What it writes
 
-Hidden notes beside your messages that only Claude reads: the figures, a suggestion to run `/compact-ready` when the context gets close to the auto-compaction point, and, after a compaction, the path of the latest handoff. It writes no files.
+Hidden notes beside your messages that only Claude reads: the figures, a suggestion to run `/compact-ready` when the context gets close to the auto-compaction point, and, after a compaction, the path of the latest handoff, as a quoted string marked as data. It writes no files of its own; what it keeps is in the plugin store described below, which Claude Code holds as a file.
 
 ## What it keeps
 
@@ -18,7 +18,7 @@ In the plugin's own store, a JSON file under the Claude Code configuration direc
 
 ## What it sends
 
-Nothing. It has no network code. The focus line goes to the engine's own compaction, the same place a pasted `/compact` line goes, and from there to the model with the rest of the conversation, under Claude Code's own terms.
+Nothing over the network: it has no network code, and the author receives nothing. Inside the session it hands text to Claude Code: the hidden notes, with the handoff path as a quoted string, go to the model with your message; the focus line goes to the engine's own compaction, the same place a pasted `/compact` line goes, and from there to the model with the rest of the conversation, under Claude Code's own terms.
 
 ## What the author collects
 

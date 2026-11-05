@@ -24,7 +24,7 @@ Compact Ready itself is installed separately, from the Claude plugin directory o
 
 Both work only as the whole message: a word inside a sentence does nothing. In Claude Code `context-left` also exists as the slash command `/context-left`. There is no `/context-compact`: the engine lets a plugin start a compaction only after one of Claude's replies, so the word is the way everywhere. In a chat on claude.ai the mod is not loaded, so the words do nothing there.
 
-When the context reaches three quarters of the auto-compaction point the engine reports, the mod asks Claude to suggest `/compact-ready` once the current step is done; from nine tenths it repeats the suggestion once and keeps a note of the latest handoff beside every message. After a compaction it noticed, your next message carries a note naming the latest handoff, so Claude reads it before going on. The mod notices a compaction by the engine's own counter: a compaction that frees little (a short conversation under a large system prompt) can go unnoticed until the next measurement, and a session you resume is not mistaken for one.
+When the context reaches three quarters of the auto-compaction point the engine reports, the mod asks Claude to suggest `/compact-ready` once the current step is done; from nine tenths it repeats the suggestion once and keeps a note of the latest handoff beside every message. After a compaction it noticed, your next message carries a note naming the latest handoff, so Claude reads it before going on. The mod notices a compaction by the engine's own counter: a compaction that frees less than a fifth of the context (a short conversation under a large system prompt) can go unnoticed altogether, and a session you resume is not mistaken for one, with one exception: a session resumed within two minutes of a `context-compact` or `/compact` that never went through reads as that compaction.
 
 ## What the mod does
 
@@ -60,7 +60,7 @@ The mod reads the text of your messages only to recognise the two words and the 
 - The auto-compaction point it shows is the one the engine reports; a managed environment can compact earlier.
 - In Cowork the compaction runs silently: Claude tells you the result with your next message.
 - Where mods are not loaded, for example under managed settings that keep them out, the words do nothing and Compact Ready works alone.
-- It notices a compaction by the engine's own counter: a compaction that frees little can go unnoticed until the next measurement.
+- It notices a compaction by the engine's own counter: a compaction that frees less than a fifth of the context can go unnoticed altogether; one that leaves the counter empty is noticed with the next message.
 
 ## How it was tested
 
