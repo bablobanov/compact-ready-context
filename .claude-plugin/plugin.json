@@ -2,7 +2,7 @@
   "name": "compact-ready-cowork",
   "displayName": "Compact Ready Cowork",
   "version": "1.0.0",
-  "description": "Add-on for Compact Ready: the context figures in /compact-ready, the words context-left and context-compact, and in Cowork the compaction with the handoff's focus. Needs the compact-ready plugin.",
+  "description": "Add-on for Compact Ready: gives /compact-ready the context figures, adds the words context-left and context-compact, and in Cowork compacts with the handoff's focus. Needs the compact-ready plugin.",
   "author": {
     "name": "Ilya Balobanov",
     "url": "https://bablobanov.com"
