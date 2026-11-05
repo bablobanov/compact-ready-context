@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-05
 
-Compact Ready Cowork is an add-on plugin for Compact Ready made of one small hooks module (a "mod") that runs inside Claude Code's plugin runtime, in the environment of your session: on your machine in the terminal, in the session's container in Cowork. In a chat on claude.ai it does not load. It has no other code: no scripts, MCP servers or network requests, and the author runs no server for it.
+Compact Ready Context is an add-on plugin for Compact Ready made of one small hooks module (a "mod") that runs inside Claude Code's plugin runtime, in the environment of your session: on your machine in the terminal, in the session's container in Cowork. In a chat on claude.ai it does not load. It has no other code: no scripts, MCP servers or network requests, and the author runs no server for it.
 
 ## What it reads
 
@@ -30,4 +30,4 @@ The store keeps the last 20 sessions until the plugin or the file is deleted; `/
 
 ## Contact
 
-Open an issue at https://github.com/bablobanov/compact-ready-cowork/issues or write to info@bablobanov.com.
+Open an issue at https://github.com/bablobanov/compact-ready-context/issues or write to info@bablobanov.com.

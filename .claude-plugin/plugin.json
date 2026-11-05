@@ -1,17 +1,17 @@
 {
-  "name": "compact-ready-cowork",
-  "displayName": "Compact Ready Cowork",
+  "name": "compact-ready-context",
+  "displayName": "Compact Ready Context",
   "version": "1.0.0",
   "description": "Add-on for Compact Ready: gives /compact-ready the context figures, adds the words context-left and context-compact, and in Cowork compacts with the handoff's focus. Needs the compact-ready plugin.",
   "author": {
     "name": "Ilya Balobanov",
     "url": "https://bablobanov.com"
   },
-  "homepage": "https://github.com/bablobanov/compact-ready-cowork",
-  "repository": "https://github.com/bablobanov/compact-ready-cowork",
+  "homepage": "https://github.com/bablobanov/compact-ready-context",
+  "repository": "https://github.com/bablobanov/compact-ready-context",
   "license": "MIT",
   "keywords": ["compact-ready", "compaction", "context-window", "cowork", "context"],
-  "documentationUrl": "https://github.com/bablobanov/compact-ready-cowork#readme",
-  "supportUrl": "https://github.com/bablobanov/compact-ready-cowork/issues",
-  "privacyPolicyUrl": "https://github.com/bablobanov/compact-ready-cowork/blob/main/PRIVACY.md"
+  "documentationUrl": "https://github.com/bablobanov/compact-ready-context#readme",
+  "supportUrl": "https://github.com/bablobanov/compact-ready-context/issues",
+  "privacyPolicyUrl": "https://github.com/bablobanov/compact-ready-context/blob/main/PRIVACY.md"
 }

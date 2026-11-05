@@ -8,8 +8,8 @@ Only the latest release receives fixes.
 
 Please do not report security problems in public issues.
 
-- Preferred: open a private report on GitHub (Security tab → Report a vulnerability): https://github.com/bablobanov/compact-ready-cowork/security/advisories/new
-- Or email info@bablobanov.com with "compact-ready-cowork security" in the subject.
+- Preferred: open a private report on GitHub (Security tab → Report a vulnerability): https://github.com/bablobanov/compact-ready-context/security/advisories/new
+- Or email info@bablobanov.com with "compact-ready-context security" in the subject.
 
 Please include what you found, how to reproduce it, the plugin version and your Claude Code version.
 
@@ -19,7 +19,7 @@ I confirm receipt within two working days, investigate, and keep you updated. A 
 
 ## Scope
 
-Compact Ready Cowork is one small hooks module. In scope:
+Compact Ready Context is one small hooks module. In scope:
 
 - code in the module that could read or write files, reach the network, act as the user, or alter messages beyond the hidden notes described in PRIVACY.md
 - problems in the plugin manifest

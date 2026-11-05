@@ -1,4 +1,4 @@
-# Compact Ready Cowork
+# Compact Ready Context
 
 Send `context-left` to see how full the context is, and `context-compact` to compact with the focus of your latest handoff, including in Cowork, where there is no `/compact`. This is an add-on for [Compact Ready](https://github.com/bablobanov/compact-ready): a separate plugin made of one small hooks module (a "mod") that runs inside Claude Code's plugin runtime. It gives `/compact-ready` the context figures, so the skill can say how full the context is and, where there is no `/compact`, print the word that compacts. It answers two words sent as whole messages, `context-left` and `context-compact`. It asks Claude to suggest `/compact-ready` when the context nears the auto-compaction point, and after a compaction it names the latest handoff, so Claude reads it before going on.
 
@@ -10,7 +10,7 @@ From this repository, in Claude Code:
 
 ```
 /plugin marketplace add bablobanov/compact-ready
-/plugin install compact-ready-cowork@bablobanov
+/plugin install compact-ready-context@bablobanov
 ```
 
 Compact Ready itself is installed separately, from the Claude plugin directory or with `/plugin install compact-ready@bablobanov` from the same marketplace. Plugins from third-party marketplaces do not update on their own by default: to get a new version, run `/plugin marketplace update bablobanov`, then `/reload-plugins`.
