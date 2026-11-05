@@ -47,6 +47,7 @@ type Harness = {
   runs: CommandRunInput[]
   registered: string[]
   compacts: SessionCompactInput[]
+  completed: string[]
   usage: (u: UsageMode) => void
   onRun: (f: (e: CommandRunInput) => Promise<CommandRunResult> | CommandRunResult) => void
   onCompact: (f: (e: SessionCompactInput) => SessionCompactResult) => void
@@ -73,6 +74,7 @@ const harness = ($: Engine, on: On, id = 's1'): Harness => {
   const runs: CommandRunInput[] = []
   const registered: string[] = []
   const compacts: SessionCompactInput[] = []
+  const completed: string[] = []
   let mode: UsageMode = { tokens: 100000, threshold: THRESHOLD }
   let throws = false
   let run: (e: CommandRunInput) => Promise<CommandRunResult> | CommandRunResult = () => ({ text: '' })
@@ -113,12 +115,15 @@ const harness = ($: Engine, on: On, id = 's1'): Harness => {
   })
   on('prompt.submit', (_, e) => ({ text: e.text, context: e.context, origin: e.origin }))
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
-  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('turn.complete', (_, e) => {
+    completed.push(e.turnId)
+    return { text: e.answer }
+  })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.end', (_, e) => ({ sessionId: e.sessionId }))
 
   return {
-    clock, db, runs, registered, compacts,
+    clock, db, runs, registered, compacts, completed,
     usage: (u) => { mode = u },
     onRun: (f) => { run = f },
     onCompact: (f) => { compact = f },
@@ -408,8 +413,12 @@ test('C5 a rejected compact command clears the request and is reported by contex
   const lines = await ctx($, 'anything')
   expect(hasNote(lines, AFTER)).toBe(false)
   expect(h.rec().compactRequested).toBeUndefined()
+  // the error text can echo a rejected focus, so no note for the model carries it; the slash
+  // command answers it to the user, quoted as data
   const left = note(await ctx($, 'context-left'), LEFT)
-  expect(left).toContain('last mod error: compact command rejected')
+  expect(left).not.toContain('last mod error')
+  const r = await $.command.run({ command: 'context-left', args: '', origin: ORIGIN, presentation: PRESENTATION })
+  expect(r.text).toContain('last mod error (data): "compact command rejected: ')
 })
 
 test('C6 an accepted word is confirmed by the empty counter and the after figure is filled later', async ($, on) => {
@@ -1188,4 +1197,115 @@ test('K2 no slash command compacts: context-compact is not registered and only t
   const lines = await ctx($, 'next')
   expect(note(lines, AFTER)).toContain('started by the word context-compact')
   expect(lines.filter((l) => l.includes('compacted before'))).toHaveLength(1)
+})
+
+// ---------- R: findings of the code review (go-codex, 05.11) ----------
+
+test('R1 an older plain entry whose text begins the word does not take the word turn', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await skillTurn($, ccAnswer())
+  await submit($, 'context')
+  await submit($, 'context-compact')
+  await turn($, 'context-compact')
+  expect(h.runs.filter((e) => e.command === 'compact')).toHaveLength(1)
+  expect(h.rec().compactRequested?.kind).toBe('word')
+  expect(h.rec().queue).toHaveLength(0)
+})
+
+test('R1b a short message binds its turn only as the whole text; a long one still binds by its head', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await submit($, 'hello')
+  await turnStart($, 'hello there')
+  expect(h.rec().queue.filter((q) => q.turnId !== undefined)).toHaveLength(0)
+  await turnStart($, 'hello ')
+  expect(h.rec().queue.filter((q) => q.turnId !== undefined)).toHaveLength(1)
+  const long = 'x'.repeat(100)
+  await submit($, long)
+  await turnStart($, long + ' and more')
+  expect(h.rec().queue.filter((q) => q.turnId === undefined)).toHaveLength(0)
+  await submit($, '')
+  await turnStart($, 'anything')
+  expect(h.rec().queue.filter((q) => q.turnId === undefined)).toHaveLength(1)
+})
+
+test('R2 a store failure after the turn completed does not run the completion twice', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await submit($, 'work')
+  const turnId = await turnStart($, 'work')
+  h.storeThrows(true)
+  const r = await turnEnd($, turnId, 'answer text')
+  expect(r.text).toBe('answer text')
+  expect(h.completed.filter((t) => t === turnId)).toHaveLength(1)
+  h.storeThrows(false)
+  await submit($, 'next')
+  expect(h.rec().queue.filter((q) => q.turnId === undefined)).toHaveLength(1)
+})
+
+test('R3 a request marked by a restart ends after a day without any measurement', async ($, on) => {
+  const h = harness($, on)
+  h.usage({ tokens: 300000, threshold: THRESHOLD })
+  await start($)
+  await ctx($, 'w')
+  await submit($, 'context-compact')
+  await turn($, 'context-compact')
+  await h.clock.advance(30000)
+  await start($)
+  expect(h.rec().compactRequested?.restartAt).toBeDefined()
+  h.usage('throw')
+  await h.clock.advance(25 * 60 * MINUTE)
+  const lines = await ctx($, 'later')
+  expect(hasNote(lines, AFTER)).toBe(false)
+  expect(h.rec().compactRequested).toBeUndefined()
+  expect(h.rec().lastError).toContain('did not happen')
+})
+
+test('R4 turns that never complete do not grow the queue past its cap', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  for (let i = 0; i < 40; i++) {
+    await submit($, 'message number ' + String(i))
+    await turnStart($, 'message number ' + String(i))
+  }
+  expect(h.rec().queue.length).toBeLessThanOrEqual(24)
+  await skillTurn($, ccAnswer())
+  expect(h.rec().handoff?.path).toBe(PATH_A)
+  expect(h.rec().queue.length).toBeLessThanOrEqual(24)
+})
+
+test('R5 a record the index lost is taken back as the oldest', async ($, on) => {
+  const h = harness($, on)
+  h.db.set('run:lost', { startedAt: 1, processStartedAt: 1, queue: [] })
+  h.db.set('runs', [])
+  await start($)
+  expect(h.db.get('runs')).toEqual(['lost', 's1'])
+  expect(h.db.has('run:lost')).toBe(true)
+})
+
+test('R7 the fence may carry a language tag, prose may follow the block, blank lines inside are skipped, four backticks are not a fence', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await skillTurn($, 'Done.\n\n' + FENCE + 'text\n' + ccLine('tasks/tag.md') + '\n' + FENCE + '\n\nAnything else?')
+  expect(h.rec().handoff?.path).toBe('tasks/tag.md')
+  await skillTurn($, 'Done.\n\n' + FENCE + '\nHandoff: tasks/cw.md\n\nTo compact now, send: context-compact\n\nFocus: x. Handoff: tasks/cw.md, read it first after compaction. ' + ANCHOR + '.\n' + FENCE)
+  expect(h.rec().handoff?.path).toBe('tasks/cw.md')
+  const four = FENCE + FENCE.slice(0, 1)
+  await skillTurn($, 'Done.\n\n' + four + '\n' + ccLine('tasks/four.md') + '\n' + four)
+  expect(h.rec().handoff?.path).toBe('tasks/cw.md')
+})
+
+test('R8 a message typed over a running turn and that turn completing at once both keep their changes', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await submit($, '/compact-ready', { command: SKILL_CMD })
+  const a = await turnStart($, '/compact-ready')
+  const [, r] = await Promise.all([
+    turnEnd($, a, ccAnswer()),
+    submit($, 'typed meanwhile', { turnId: a }),
+  ])
+  expect(r.text).toBe('typed meanwhile')
+  expect(h.rec().handoff?.path).toBe(PATH_A)
+  expect(h.rec().queue.filter((q) => q.textHead === 'typed meanwhile')).toHaveLength(1)
 })

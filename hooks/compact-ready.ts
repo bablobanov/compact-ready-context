@@ -36,6 +36,8 @@ const TEXT_HEAD = 80
 const FOCUS_MAX = 2000
 const PATH_MAX = 500
 const RUNS_KEPT = 20
+const QUEUE_TOTAL_MAX = 24
+const REQUEST_MAX_MS = 86400000
 const ERROR_MAX = 300
 const INDEX = 'runs'
 const PREFIX = 'run:'
@@ -85,6 +87,22 @@ const sanitizePath = (s: string): string => s.replace(UNSAFE_CHARS, '').trim()
 const newRecord = (now: number): RunRecord => ({
   startedAt: now, processStartedAt: now, isInteractive: false, surface: null, seq: 0, fresh: true, hintedBand: 0, queue: [],
 })
+
+// One hook at a time per session. The hooks of one session can overlap in time (a message typed
+// over a running turn arrives while that turn's completion is still being handled), and each of
+// them reads the record, changes it and writes it back. The lock lives in memory only: it is not
+// state that has to survive a restart, so it is not in the store.
+const locks = new Map<string, Promise<unknown>>()
+const locked = <T>(id: string, work: () => Promise<T>): Promise<T> => {
+  const prev = locks.get(id) ?? Promise.resolve()
+  const run = prev.then(work, work)
+  const tail = run.then(() => undefined, () => undefined)
+  locks.set(id, tail)
+  void tail.then(() => {
+    if (locks.get(id) === tail) locks.delete(id)
+  })
+  return run
+}
 
 // ---------- reading the store without trusting its shape ----------
 
@@ -195,8 +213,12 @@ const noteError = async ($: Dollar, id: string, rec: RunRecord, err: unknown): P
 }
 
 const touchIndex = async ($: Dollar, id: string): Promise<void> => {
-  const runs = readIndex(await $.store.get(INDEX)).filter((x) => x !== id)
-  runs.push(id)
+  const known = readIndex(await $.store.get(INDEX)).filter((x) => x !== id)
+  // a record the index lost (two sessions starting at once write the index over each other)
+  // is taken back as the oldest, so the limit of RUNS_KEPT holds for the store as a whole
+  const stored = (await $.store.keys()).filter((k) => k.startsWith(PREFIX)).map((k) => k.slice(PREFIX.length))
+  const orphans = stored.filter((x) => x !== id && !known.includes(x))
+  const runs = [...orphans, ...known, id]
   while (runs.length > RUNS_KEPT) {
     const old = runs.shift()
     if (old !== undefined) await $.store.delete(PREFIX + old)
@@ -247,7 +269,7 @@ const lastCompactionText = (rec: RunRecord | undefined, now: number): string => 
   return minutesAgo(c.at, now) + ' minutes ago (' + before + ' -> ' + after + ' tokens)'
 }
 
-const figuresText = (f: Figures | undefined, rec: RunRecord | undefined, now: number): string => {
+const figuresText = (f: Figures | undefined, rec: RunRecord | undefined, now: number, withError = false): string => {
   const parts: string[] = []
   if (f === undefined) {
     parts.push('context: not measured (the engine did not answer)')
@@ -259,7 +281,9 @@ const figuresText = (f: Figures | undefined, rec: RunRecord | undefined, now: nu
     else parts.push('auto-compaction: not reported')
   }
   parts.push('last compaction in this session: ' + lastCompactionText(rec, now))
-  if (rec && rec.lastError !== undefined) parts.push('last mod error: ' + rec.lastError)
+  // the last error is shown only in the answer of the slash command, quoted as data: an error
+  // text can echo a rejected focus, so it never goes into a note the model reads as its own
+  if (withError && rec && rec.lastError !== undefined) parts.push('last mod error (data): ' + JSON.stringify(rec.lastError))
   return parts.join('; ')
 }
 
@@ -410,16 +434,37 @@ const trimQueue = (rec: RunRecord): void => {
     if (i < 0) return
     rec.queue.splice(i, 1)
   }
+  // bound entries leave at turn.complete; when completions go missing, the oldest ones go first
+  while (rec.queue.length > QUEUE_TOTAL_MAX) {
+    const i = rec.queue.findIndex((q) => q.turnId !== undefined)
+    if (i < 0) return
+    rec.queue.splice(i, 1)
+  }
+}
+
+// the head is the whole message when it is shorter than TEXT_HEAD: then the turn's text must be
+// that message, not one that merely begins with it (the word "context" is not "context-compact",
+// and "hello" is not "hello there"); what the engine may add after it starts on a new line
+const headMatches = (head: string, text: string): boolean => {
+  if (!text.startsWith(head)) return false
+  if (head.length >= TEXT_HEAD) return true
+  const rest = text.slice(head.length)
+  return rest.trim().length === 0 || /^[ \t]*\r?\n/.test(rest)
 }
 
 const matches = (q: QueueEntry, text: string): boolean => {
   if (q.kind === 'skill') return SKILL_TURN_TEXT.test(text)
-  if (q.kind === 'compact') return text.startsWith(q.textHead) && WORD_COMPACT.test(text)
-  return text.startsWith(q.textHead)
+  if (q.kind === 'compact') return headMatches(q.textHead, text) && WORD_COMPACT.test(text)
+  return headMatches(q.textHead, text)
 }
 
+const wanted = (text: string): QueueKind => (WORD_COMPACT.test(text) ? 'compact' : SKILL_TURN_TEXT.test(text) ? 'skill' : 'plain')
+
 const bindTurn = (rec: RunRecord, text: string, turnId: string, now: number): boolean => {
-  const i = rec.queue.findIndex((q) => q.turnId === undefined && matches(q, text))
+  // an entry of the turn's own kind first, so that an older plain entry never takes a word or skill turn
+  const want = wanted(text)
+  let i = rec.queue.findIndex((q) => q.turnId === undefined && q.kind === want && matches(q, text))
+  if (i < 0 && want !== 'plain') i = rec.queue.findIndex((q) => q.turnId === undefined && matches(q, text))
   if (i < 0) return false
   const kept: QueueEntry[] = []
   rec.queue.forEach((q, n) => {
@@ -441,9 +486,14 @@ const failRequest = (rec: RunRecord, r: Request): void => {
   delete rec.compactRequested
 }
 
+// Within one run of the engine a request waits for the first measurement after it, however long
+// the user takes to send the next message (in the terminal the counter is empty right after the
+// compaction, whenever that message comes); the clock alone ends it only after REQUEST_MAX_MS.
+// The two-minute limit applies at a restart (session.start): a later restart is a resumed
+// session, whose empty counter must not pass for the compaction.
 const expireRequest = (rec: RunRecord, now: number): void => {
   const r = rec.compactRequested
-  if (r && r.restartAt === undefined && now - r.at > REQUEST_TTL_MS) failRequest(rec, r)
+  if (r && now - r.at > REQUEST_MAX_MS) failRequest(rec, r)
 }
 
 const fillAfter = (rec: RunRecord, t: number | undefined): void => {
@@ -552,13 +602,14 @@ const onPrompt = async ($: Dollar, rec: RunRecord, e: Prompt, now: number): Prom
 
 // ---------- compaction requests ----------
 
-const dropOwnRequest = async ($: Dollar, id: string, reqId: number, err: unknown): Promise<void> => {
-  const cur = await load($, id)
-  if (!cur || !cur.compactRequested || cur.compactRequested.id !== reqId) return
-  delete cur.compactRequested
-  cur.lastError = 'compact command rejected: ' + reason(err)
-  await save($, id, cur)
-}
+const dropOwnRequest = ($: Dollar, id: string, reqId: number, err: unknown): Promise<void> =>
+  locked(id, async () => {
+    const cur = await load($, id)
+    if (!cur || !cur.compactRequested || cur.compactRequested.id !== reqId) return
+    delete cur.compactRequested
+    cur.lastError = 'compact command rejected: ' + reason(err)
+    await save($, id, cur)
+  })
 
 const startWordCompaction = ($: Dollar, id: string, reqId: number, args: string): void => {
   void $.command.run({ command: 'compact', args }).then(
@@ -594,38 +645,45 @@ const finishTurn = async ($: Dollar, id: string, rec: RunRecord, turnId: string,
 export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     const id = await $.session.id()
-    const now = await $.clock.now()
-    const rec = (await load($, id)) ?? newRecord(now)
-    rec.processStartedAt = now
-    rec.isInteractive = e.isInteractive
-    rec.surface = e.surface
-    rec.fresh = true
-    rec.queue = rec.queue.filter((q) => q.turnId === undefined)
-    const r = rec.compactRequested
-    if (r && r.restartAt === undefined && now - r.at <= REQUEST_TTL_MS) r.restartAt = now
-    await save($, id, rec)
-    await touchIndex($, id)
+    await locked(id, async () => {
+      const now = await $.clock.now()
+      const rec = (await load($, id)) ?? newRecord(now)
+      rec.processStartedAt = now
+      rec.isInteractive = e.isInteractive
+      rec.surface = e.surface
+      rec.fresh = true
+      rec.queue = rec.queue.filter((q) => q.turnId === undefined)
+      const r = rec.compactRequested
+      if (r && r.restartAt === undefined) {
+        if (now - r.at <= REQUEST_TTL_MS) r.restartAt = now
+        else failRequest(rec, r)
+      }
+      await save($, id, rec)
+      await touchIndex($, id)
+    })
     await $.command.register({ name: LEFT_NAME, description: 'Context fill as the engine measures it, and the auto-compaction point', immediate: true })
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('session.end', async ($, e, next) => {
-    if (e.reason === 'clear') await forgetRun($, e.sessionId)
+    if (e.reason === 'clear') await locked(e.sessionId, () => forgetRun($, e.sessionId))
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('prompt.submit', async ($, e, next) => {
     const id = await $.session.id()
-    const now = await $.clock.now()
-    const rec = (await load($, id)) ?? newRecord(now)
-    let lines: string[]
-    try {
-      lines = await onPrompt($, rec, e, now)
-      await save($, id, rec)
-    } catch (err) {
-      await noteError($, id, rec, err)
-      return next(e)
-    }
+    const lines = await locked(id, async (): Promise<string[]> => {
+      const now = await $.clock.now()
+      const rec = (await load($, id)) ?? newRecord(now)
+      try {
+        const out = await onPrompt($, rec, e, now)
+        await save($, id, rec)
+        return out
+      } catch (err) {
+        await noteError($, id, rec, err)
+        return []
+      }
+    })
     if (lines.length === 0) return next(e)
     return next({ ...e, context: [...(e.context ?? []), ...lines] })
   }).catch(($, e, next) => next(e))
@@ -633,9 +691,11 @@ export const register: Register = (on) => {
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
       const id = await $.session.id()
-      const now = await $.clock.now()
-      const rec = await load($, id)
-      if (rec && bindTurn(rec, e.text, e.turnId, now)) await save($, id, rec)
+      await locked(id, async () => {
+        const now = await $.clock.now()
+        const rec = await load($, id)
+        if (rec && bindTurn(rec, e.text, e.turnId, now)) await save($, id, rec)
+      })
     }
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -643,10 +703,17 @@ export const register: Register = (on) => {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     if (e.agentId !== undefined) return r
-    const id = await $.session.id()
-    const now = await $.clock.now()
-    const rec = await load($, id)
-    if (rec) await finishTurn($, id, rec, e.turnId, e.answer, now)
+    try {
+      const id = await $.session.id()
+      await locked(id, async () => {
+        const now = await $.clock.now()
+        const rec = await load($, id)
+        if (rec) await finishTurn($, id, rec, e.turnId, e.answer, now)
+      })
+    } catch {
+      // the turn is already through: next ran above and must not run again, and a failed
+      // bookkeeping step (the store, the clock) changes nothing for the user
+    }
     return r
   }).catch(($, e, next) => next(e))
 
@@ -655,6 +722,6 @@ export const register: Register = (on) => {
     const now = await $.clock.now()
     const rec = await load($, id)
     const f = await figures($)
-    return { text: figuresText(f, rec, now) }
+    return { text: figuresText(f, rec, now, true) }
   }).catch(() => ({ text: 'context-left failed' }))
 }
