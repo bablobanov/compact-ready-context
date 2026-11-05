@@ -10,6 +10,7 @@
   "homepage": "https://github.com/bablobanov/compact-ready-context",
   "repository": "https://github.com/bablobanov/compact-ready-context",
   "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
   "keywords": ["compact-ready", "compaction", "context-window", "cowork", "context"],
   "documentationUrl": "https://github.com/bablobanov/compact-ready-context#readme",
   "supportUrl": "https://github.com/bablobanov/compact-ready-context/issues",
