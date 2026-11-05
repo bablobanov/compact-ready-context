@@ -217,8 +217,8 @@ const touchIndex = async ($: Dollar, id: string): Promise<void> => {
   const known = readIndex(await $.store.get(INDEX)).filter((x) => x !== id)
   // a record the index lost (two sessions starting at once write the index over each other)
   // is taken back after the records the index knows: such a record is recent, so the one
-  // trimmed is the oldest known record, never the fresh record of a session starting beside
-  // this one; the limit of RUNS_KEPT still holds for the store as a whole
+  // trimmed is the oldest known record, not the record of a session starting for the first
+  // time beside this one; the limit of RUNS_KEPT still holds for the store as a whole
   const stored = (await $.store.keys()).filter((k) => k.startsWith(PREFIX)).map((k) => k.slice(PREFIX.length))
   const orphans = stored.filter((x) => x !== id && !known.includes(x))
   const runs = [...known, ...orphans, id]
@@ -456,9 +456,9 @@ const headMatches = (head: string, text: string): boolean => {
   return rest.trim().length === 0 || /^[ \t]*\r?\n/.test(rest)
 }
 
-// the word turn: the word is the whole first line of the turn's text, so that what the engine
-// may add after it on a new line keeps the turn, and text on the word's own line does not
-const firstLine = (text: string): string => text.split(/\r?\n/, 1)[0] ?? ''
+// the word turn: the word is the whole first non-empty line of the turn's text, so that what the
+// engine may add after it on a new line keeps the turn, and text on the word's own line does not
+const firstLine = (text: string): string => text.trimStart().split(/\r?\n/, 1)[0] ?? ''
 const isWordTurn = (text: string): boolean => WORD_COMPACT.test(firstLine(text))
 
 const matches = (q: QueueEntry, text: string): boolean => {
@@ -470,10 +470,16 @@ const matches = (q: QueueEntry, text: string): boolean => {
 const wanted = (text: string): QueueKind => (isWordTurn(text) ? 'compact' : SKILL_TURN_TEXT.test(text) ? 'skill' : 'plain')
 
 const bindTurn = (rec: RunRecord, text: string, turnId: string, now: number): boolean => {
-  // an entry of the turn's own kind first, so that an older plain entry never takes a word or skill turn
+  // among the waiting entries the text fits, the longest head wins (a two-line message over the
+  // word that merely begins it), then the entry of the turn's own kind, then the oldest
   const want = wanted(text)
-  let i = rec.queue.findIndex((q) => q.turnId === undefined && q.kind === want && matches(q, text))
-  if (i < 0 && want !== 'plain') i = rec.queue.findIndex((q) => q.turnId === undefined && matches(q, text))
+  let i = -1
+  rec.queue.forEach((q, n) => {
+    if (q.turnId !== undefined || !matches(q, text)) return
+    const best = i < 0 ? undefined : rec.queue[i]
+    if (best === undefined || q.textHead.length > best.textHead.length
+      || (q.textHead.length === best.textHead.length && q.kind === want && best.kind !== want)) i = n
+  })
   if (i < 0) return false
   const kept: QueueEntry[] = []
   rec.queue.forEach((q, n) => {
