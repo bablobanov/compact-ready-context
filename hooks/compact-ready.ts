@@ -23,6 +23,7 @@ const FORMAT_SUFFIX_RE = /\s*Format the summary as the "[^"\n]*" section of [^\n
 const TAIL_RE = /Handoff:\s*(.+?),\s*read it first after compaction\.\s*compact-ready has already run; do not run it again after compaction\.\s*$/
 const COWORK_SEND = 'To compact now, send: context-compact'
 const FENCE = String.fromCharCode(96, 96, 96)
+const FOUR_TICKS = FENCE + FENCE.slice(0, 1)
 const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
 
 const HINT_FIRST = 0.75
@@ -215,10 +216,12 @@ const noteError = async ($: Dollar, id: string, rec: RunRecord, err: unknown): P
 const touchIndex = async ($: Dollar, id: string): Promise<void> => {
   const known = readIndex(await $.store.get(INDEX)).filter((x) => x !== id)
   // a record the index lost (two sessions starting at once write the index over each other)
-  // is taken back as the oldest, so the limit of RUNS_KEPT holds for the store as a whole
+  // is taken back after the records the index knows: such a record is recent, so the one
+  // trimmed is the oldest known record, never the fresh record of a session starting beside
+  // this one; the limit of RUNS_KEPT still holds for the store as a whole
   const stored = (await $.store.keys()).filter((k) => k.startsWith(PREFIX)).map((k) => k.slice(PREFIX.length))
   const orphans = stored.filter((x) => x !== id && !known.includes(x))
-  const runs = [...orphans, ...known, id]
+  const runs = [...known, ...orphans, id]
   while (runs.length > RUNS_KEPT) {
     const old = runs.shift()
     if (old !== undefined) await $.store.delete(PREFIX + old)
@@ -365,7 +368,8 @@ const lastBlock = (answer: string): string[] | undefined => {
   for (let i = 0; i < rows.length; i++) {
     const t = (rows[i] ?? '').trim()
     if (open < 0) {
-      if (t.startsWith(FENCE)) open = i
+      // three backticks open the block, with or without a language tag; four are not its fence (3.8)
+      if (t.startsWith(FENCE) && !t.startsWith(FOUR_TICKS)) open = i
     } else if (t === FENCE) {
       last = rows.slice(open + 1, i).map((r) => r.trim()).filter((r) => r.length > 0)
       open = -1
@@ -452,13 +456,18 @@ const headMatches = (head: string, text: string): boolean => {
   return rest.trim().length === 0 || /^[ \t]*\r?\n/.test(rest)
 }
 
+// the word turn: the word is the whole first line of the turn's text, so that what the engine
+// may add after it on a new line keeps the turn, and text on the word's own line does not
+const firstLine = (text: string): string => text.split(/\r?\n/, 1)[0] ?? ''
+const isWordTurn = (text: string): boolean => WORD_COMPACT.test(firstLine(text))
+
 const matches = (q: QueueEntry, text: string): boolean => {
   if (q.kind === 'skill') return SKILL_TURN_TEXT.test(text)
-  if (q.kind === 'compact') return headMatches(q.textHead, text) && WORD_COMPACT.test(text)
+  if (q.kind === 'compact') return headMatches(q.textHead, text) && isWordTurn(text)
   return headMatches(q.textHead, text)
 }
 
-const wanted = (text: string): QueueKind => (WORD_COMPACT.test(text) ? 'compact' : SKILL_TURN_TEXT.test(text) ? 'skill' : 'plain')
+const wanted = (text: string): QueueKind => (isWordTurn(text) ? 'compact' : SKILL_TURN_TEXT.test(text) ? 'skill' : 'plain')
 
 const bindTurn = (rec: RunRecord, text: string, turnId: string, now: number): boolean => {
   // an entry of the turn's own kind first, so that an older plain entry never takes a word or skill turn
@@ -653,10 +662,13 @@ export const register: Register = (on) => {
       rec.surface = e.surface
       rec.fresh = true
       rec.queue = rec.queue.filter((q) => q.turnId === undefined)
+      // a restart within two minutes of a request marks it (Cowork restarts the engine after
+      // the word); a restart later than that is a resumed session, whose empty counter must
+      // not pass for the compaction, whatever restarts came before (3.5)
       const r = rec.compactRequested
-      if (r && r.restartAt === undefined) {
-        if (now - r.at <= REQUEST_TTL_MS) r.restartAt = now
-        else failRequest(rec, r)
+      if (r) {
+        if (now - r.at > REQUEST_TTL_MS) failRequest(rec, r)
+        else if (r.restartAt === undefined) r.restartAt = now
       }
       await save($, id, rec)
       await touchIndex($, id)
@@ -712,7 +724,8 @@ export const register: Register = (on) => {
       })
     } catch {
       // the turn is already through: next ran above and must not run again, and a failed
-      // bookkeeping step (the store, the clock) changes nothing for the user
+      // bookkeeping step (the store, the clock) changes nothing for the user; should next itself
+      // reject, the .catch handler's next replays that call (Caught in the engine types)
     }
     return r
   }).catch(($, e, next) => next(e))
