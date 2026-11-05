@@ -56,7 +56,7 @@ The mod reads the text of your messages only to recognise the two words and the 
 
 ## Limitations
 
-- Tested with Claude Code 2.1.318 through its plugin test kit. A live run in the command line and in Cowork is still ahead; other versions were not tested.
+- Tested with Claude Code 2.1.318 through its plugin test kit and in headless sessions of the command line. A live run in the interactive terminal and in Cowork is still ahead; other versions were not tested.
 - The auto-compaction point it shows is the one the engine reports; a managed environment can compact earlier.
 - In Cowork the compaction runs silently: Claude tells you the result with your next message.
 - Where mods are not loaded, for example under managed settings that keep them out, the words do nothing and Compact Ready works alone.
@@ -64,7 +64,7 @@ The mod reads the text of your messages only to recognise the two words and the 
 
 ## How it was tested
 
-Its tests run against the engine itself (`claude plugin test`): the two words sent as whole messages and inside a sentence; the hint bands at three quarters and nine tenths of the auto-compaction point, with and without auto-compaction; the focus taken only from the turn that ran `/compact-ready`, with decoy blocks, long lines and odd characters; a message typed while a long turn runs; a request that the engine never carried out; a session resumed after a compaction; the engine restarted right after the word, as Cowork does.
+Its tests run against the engine itself (`claude plugin test`): the two words sent as whole messages and inside a sentence; the hint bands at three quarters and nine tenths of the auto-compaction point, with and without auto-compaction; the focus taken only from the turn that ran `/compact-ready`, with decoy blocks, long lines and odd characters; a message typed while a long turn runs; a request that the engine never carried out; a session resumed after a compaction; the engine restarted right after the word, as Cowork does. Headless Claude Code sessions with both plugins loaded: the `/compact-ready` call prints the block with the word, `context-left` answers with the figures, a word inside a sentence does nothing, `context-compact` compacts with the handoff's focus, and the next message names the handoff.
 
 ## License
 
