@@ -711,8 +711,6 @@ test('F16 a path longer than 500 characters is refused, 500 is accepted whole', 
   expect(h.rec().handoff?.path).toBe(exact)
 })
 
-// ---------- H: the hint bands ----------
-
 // ---------- L: the sentence for the user in the Cowork block, and the wording of the notes ----------
 
 test('L1 the second line of the Cowork block may be in any language: the whole word in it is what counts', async ($, on) => {
@@ -735,6 +733,10 @@ test('L2 a Cowork block whose second line lacks the whole word is refused', asyn
   expect(h.rec().handoff).toBeUndefined()
   await skillTurn($, coworkAnswer('tasks/z.md', 'tasks/z.md', 'the task', 'To compact now, send: my-context-compact'))
   expect(h.rec().handoff).toBeUndefined()
+  for (const second of ['Send context-compact-x now', 'Send _context-compact now', 'Send context-compact_x now']) {
+    await skillTurn($, coworkAnswer('tasks/w.md', 'tasks/w.md', 'the task', second))
+    expect(h.rec().handoff).toBeUndefined()
+  }
 })
 
 test('L3 one minute reads in the singular, and the word note says when the compaction takes effect', async ($, on) => {
@@ -753,6 +755,31 @@ test('L3 one minute reads in the singular, and the word note says when the compa
   expect(after).toContain('saved a handoff 2 minutes ago, 0 turns before the compaction')
   const left = note(await ctx($, 'context-left'), LEFT)
   expect(left).toContain('last compaction in this session: 0 minutes ago (')
+})
+
+test('L4 the word note without a handoff says the compaction is requested without a focus and when it takes effect', async ($, on) => {
+  harness($, on)
+  await start($)
+  const n = note(await ctx($, 'context-compact'), COMPACT_W)
+  expect(n).toContain('No handoff of compact-ready was saved in this session')
+  expect(n).toContain('the compaction is requested without a focus and takes effect before the reply to their next message')
+})
+
+test('L5 the standby note and the skill note after a compaction read one minute in the singular', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await skillTurn($, ccAnswer())
+  await h.clock.advance(MINUTE)
+  h.usage({ tokens: 880000, threshold: THRESHOLD })
+  const standby = note(await ctx($, 'work'), STANDBY)
+  expect(standby).toContain('(saved 1 minute ago)')
+  expect(standby).not.toContain('1 minutes')
+  await submit($, 'context-compact')
+  await turn($, 'context-compact')
+  h.usage('none')
+  const skillNote = note(await ctx($, '/compact-ready', { command: SKILL_CMD }), 'compacted before this call')
+  expect(skillNote).toContain('saved 1 minute ago, 0 turns before the compaction')
+  expect(skillNote).not.toContain('1 minutes')
 })
 
 // ---------- H: the hint bands ----------
