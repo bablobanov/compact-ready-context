@@ -15,12 +15,14 @@ From this repository, in Claude Code:
 
 Compact Ready itself is installed separately, from the Claude plugin directory or with `/plugin install compact-ready@bablobanov` from the same marketplace. Plugins from third-party marketplaces do not update on their own by default: to get a new version, run `/plugin marketplace update bablobanov`, then `/reload-plugins`.
 
+In Cowork, plugins come from your account: the Claude plugin directory, or a bundle added under My Uploads. In our test a plugin just added to the account showed up only after the desktop app was quit and opened again; a new task alone did not pick it up.
+
 ## Context words
 
 | Word | What it does | Where |
 |---|---|---|
 | `context-left` | shows the context fill as the engine measures it, the auto-compaction point and the last compaction the mod saw | Claude Code, Cowork |
-| `context-compact` | compacts now, with the focus line of the latest `/compact-ready` in this session, or without a focus when there is none | Claude Code, Cowork |
+| `context-compact` | requests a compaction with the focus line of the latest `/compact-ready` in this session, or without a focus when there is none; the result shows before the reply to your next message | Claude Code, Cowork |
 
 Both work only as the whole message: a word inside a sentence does nothing. In Claude Code `context-left` also exists as the slash command `/context-left`. There is no `/context-compact`: the engine lets a plugin start a compaction only after one of Claude's replies, so the word is the way everywhere. In a chat on claude.ai the mod is not loaded, so the words do nothing there.
 
@@ -39,7 +41,7 @@ The hooks module reacts to five events of Claude Code's plugin runtime and runs 
 
 Cowork has no `/compact` command; this add-on gives you two words instead, sent as whole messages: `context-left` shows the context fill as the engine measures it; `context-compact` compacts with the focus of the latest handoff.
 
-Run `/compact-ready` as usual; its last block names the handoff and tells you to send `context-compact`. The compaction starts after Claude's one-line reply and runs silently; the result shows with your next message.
+Run `/compact-ready` as usual, from the + menu under Plugins; its last block names the handoff and tells you, in your language, to send `context-compact`. Claude answers the word in one line; the compaction is requested with that reply, runs silently, and its result shows before the answer to your next message.
 
 Where mods are not loaded (an organisation's managed settings can keep them out), Compact Ready's block tells you how to continue in a new task; the words then do nothing.
 
@@ -56,15 +58,15 @@ The mod reads the text of your messages only to recognise the two words and the 
 
 ## Limitations
 
-- Tested with Claude Code 2.1.318 through its plugin test kit and in headless sessions of the command line. A live run in the interactive terminal and in Cowork is still ahead; other versions were not tested.
+- Tested with Claude Code 2.1.318 through its plugin test kit, in headless and interactive sessions of the command line, and in Cowork (the Windows desktop app); other versions were not tested.
 - The auto-compaction point it shows is the one the engine reports; a managed environment can compact earlier.
-- In Cowork the compaction runs silently: Claude tells you the result with your next message.
+- In Cowork the compaction runs silently and takes effect before the reply to your next message; Claude's one-line answer to the word is the only sign of it.
 - Where mods are not loaded, for example under managed settings that keep them out, the words do nothing and Compact Ready works alone.
-- It notices a compaction by the engine's own counter: a compaction that frees a fifth of the context or less can go unnoticed altogether; one that leaves the counter empty is noticed with the next message.
+- It notices a compaction by the engine's own counter, not by an event of the engine: a compaction that frees a fifth of the context or less can go unnoticed altogether; one that leaves the counter empty is noticed with the next message. In Cowork the counter is empty after the restart that follows `context-compact` whether or not the compaction freed anything, so in a short task, where the fixed part of the context (system prompt, tools, skills) is most of it, the note after the word can come while the figures afterwards are no lower than before. A request older than two minutes is dropped at a restart: close the task after the word and open it again later, and the compaction passes without a note; the focus it got still names the handoff.
 
 ## How it was tested
 
-Its tests run against the engine itself (`claude plugin test`): the two words sent as whole messages and inside a sentence; the hint bands at three quarters and nine tenths of the auto-compaction point, with and without auto-compaction; the focus taken only from the turn that ran `/compact-ready`, with decoy blocks, long lines and odd characters; a message typed while a long turn runs; a request that the engine never carried out; a session resumed after a compaction; the engine restarted right after the word, as Cowork does. Headless Claude Code sessions with both plugins loaded: the `/compact-ready` call prints the block with the word, `context-left` answers with the figures, a word inside a sentence does nothing, `context-compact` compacts with the handoff's focus, and the next message names the handoff.
+Its tests run against the engine itself (`claude plugin test`): the two words sent as whole messages and inside a sentence; the hint bands at three quarters and nine tenths of the auto-compaction point, with and without auto-compaction; the focus taken only from the turn that ran `/compact-ready`, with decoy blocks, long lines and odd characters; a message typed while a long turn runs; a request that the engine never carried out; a session resumed after a compaction; the engine restarted right after the word, as Cowork does. Headless Claude Code sessions with both plugins loaded: the `/compact-ready` call prints the block with the word, `context-left` answers with the figures, a word inside a sentence does nothing, `context-compact` compacts with the handoff's focus, and the next message names the handoff. An interactive terminal session with both plugins: the hint bands, the word with its focus, an automatic compaction with its note, a resumed session without one. A Cowork task with both plugins: `context-left` with the figures, the three-line block of `/compact-ready` and two calls in a row, `context-compact` and the next message naming the handoff, the word inside a sentence doing nothing, and the task closed and opened again after the word.
 
 ## License
 
