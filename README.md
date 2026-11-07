@@ -58,7 +58,7 @@ The mod reads the text of your messages only to recognise the two words and the 
 
 ## Limitations
 
-- Tested with Claude Code 2.1.318 through its plugin test kit, in headless and interactive sessions of the command line, and in Cowork (the Windows desktop app); other versions were not tested.
+- Tested with Claude Code 2.1.318 through its plugin test kit, in headless and interactive sessions of the command line, and in Cowork (the Claude desktop app 4.23118.0 on Windows); other versions were not tested.
 - The auto-compaction point it shows is the one the engine reports; a managed environment can compact earlier.
 - In Cowork the compaction runs silently and takes effect before the reply to your next message; Claude's one-line answer to the word is the only sign of it.
 - Where mods are not loaded, for example under managed settings that keep them out, the words do nothing and Compact Ready works alone.
