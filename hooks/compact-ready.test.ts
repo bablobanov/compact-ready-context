@@ -162,10 +162,11 @@ const ccLine = (path = PATH_A, body = 'the task; no errors; files a, b; next ste
 
 const ccAnswer = (path = PATH_A, body?: string) => 'Done.\n\n' + block(ccLine(path, body))
 
-const coworkAnswer = (path = PATH_A, focusPath = path, body = 'the task; no errors; files; next step') =>
+const COWORK_SECOND = 'To compact now, send: context-compact'
+const coworkAnswer = (path = PATH_A, focusPath = path, body = 'the task; no errors; files; next step', second = COWORK_SECOND) =>
   'Done.\n\n' + block(
     'Handoff: ' + path,
-    'To compact now, send: context-compact',
+    second,
     'Focus: ' + body + '. Handoff: ' + focusPath + ', read it first after compaction. ' + ANCHOR + '.',
   )
 
@@ -708,6 +709,50 @@ test('F16 a path longer than 500 characters is refused, 500 is accepted whole', 
   expect(exact.length).toBe(500)
   await skillTurn($, block(ccLine(exact)))
   expect(h.rec().handoff?.path).toBe(exact)
+})
+
+// ---------- H: the hint bands ----------
+
+// ---------- L: the sentence for the user in the Cowork block, and the wording of the notes ----------
+
+test('L1 the second line of the Cowork block may be in any language: the whole word in it is what counts', async ($, on) => {
+  const h = harness($, on)
+  await start($, false)
+  await skillTurn($, coworkAnswer('tasks/ru.md', 'tasks/ru.md', 'the task', 'Чтобы сжать сейчас, отправьте: context-compact'))
+  expect(h.rec().handoff?.path).toBe('tasks/ru.md')
+  await skillTurn($, coworkAnswer('tasks/de.md', 'tasks/de.md', 'the task', 'Zum Komprimieren jetzt senden: context-compact.'))
+  expect(h.rec().handoff?.path).toBe('tasks/de.md')
+  await skillTurn($, coworkAnswer('tasks/up.md', 'tasks/up.md', 'the task', 'Send CONTEXT-COMPACT to compact now'))
+  expect(h.rec().handoff?.path).toBe('tasks/up.md')
+})
+
+test('L2 a Cowork block whose second line lacks the whole word is refused', async ($, on) => {
+  const h = harness($, on)
+  await start($, false)
+  await skillTurn($, coworkAnswer('tasks/x.md', 'tasks/x.md', 'the task', 'Send the word to compact now'))
+  expect(h.rec().handoff).toBeUndefined()
+  await skillTurn($, coworkAnswer('tasks/y.md', 'tasks/y.md', 'the task', 'To compact now, send: context-compacting'))
+  expect(h.rec().handoff).toBeUndefined()
+  await skillTurn($, coworkAnswer('tasks/z.md', 'tasks/z.md', 'the task', 'To compact now, send: my-context-compact'))
+  expect(h.rec().handoff).toBeUndefined()
+})
+
+test('L3 one minute reads in the singular, and the word note says when the compaction takes effect', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await skillTurn($, ccAnswer())
+  await h.clock.advance(MINUTE)
+  const n = note(await ctx($, 'context-compact'), COMPACT_W)
+  expect(n).toContain('printed 1 minute ago (0 turns ago)')
+  expect(n).not.toContain('1 minutes')
+  expect(n).toContain('takes effect before the reply to their next message')
+  await turn($, 'context-compact')
+  await h.clock.advance(MINUTE)
+  h.usage('none')
+  const after = note(await ctx($, 'next'), AFTER)
+  expect(after).toContain('saved a handoff 2 minutes ago, 0 turns before the compaction')
+  const left = note(await ctx($, 'context-left'), LEFT)
+  expect(left).toContain('last compaction in this session: 0 minutes ago (')
 })
 
 // ---------- H: the hint bands ----------
