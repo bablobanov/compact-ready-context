@@ -6,16 +6,22 @@ It is made for Claude Code and for Cowork, which uses the same agentic architect
 
 ## Install
 
-From this repository, in Claude Code:
+Compact Ready Context was submitted to the Claude plugin directory on 7 November 2026. The directory lists a mod for Claude Code, so in Cowork the add-on is installed from the marketplace in the Compact Ready repository, `bablobanov/compact-ready`; the same marketplace works in Claude Code.
+
+**In Claude Code:**
 
 ```
 /plugin marketplace add bablobanov/compact-ready
 /plugin install compact-ready-context@bablobanov
 ```
 
-Compact Ready itself is installed separately, from the Claude plugin directory or with `/plugin install compact-ready@bablobanov` from the same marketplace. Plugins from third-party marketplaces do not update on their own by default: to get a new version, run `/plugin marketplace update bablobanov`, then `/reload-plugins`.
+Plugins from third-party marketplaces do not update on their own by default: to get a new version, run `/plugin marketplace update bablobanov`, then `/reload-plugins`.
 
-In Cowork, plugins come from your account: the Claude plugin directory, or a bundle added under My Uploads. In our test a plugin just added to the account showed up only after the desktop app was quit and opened again; a new task alone did not pick it up.
+**In Cowork, the Claude desktop app:** open **Customize**, then **Plugins**; choose **Add**, then **Add marketplace**, then **Add from a repository**; enter `bablobanov/compact-ready` (the field takes a GitHub owner/repo or a Git repository URL) and press **Sync**. Open **Discover**, select Compact Ready Context and press **Add**. The plugin is then listed under **Yours**, in "From marketplaces you added", marked "from compact-ready". No restart was needed in our test: the next new task answered `context-left` at once. Adding a public repository needs no GitHub account connected to the app; the app keeps the marketplace in sync on its own only after you grant the Claude GitHub App access and turn on **Sync automatically**, otherwise sync it by hand to get a new version. Add only this add-on from the marketplace: Compact Ready itself comes from the Claude plugin directory, and a second copy of it would give you two skills with one name.
+
+**As a fallback,** add the plugin as a bundle under My Uploads on the same Plugins page: a zip of this repository with its `.claude-plugin/plugin.json`. A bundle added that way showed up in our test only after the desktop app was quit and opened again; a new task alone did not pick it up.
+
+Compact Ready itself is installed separately, from the Claude plugin directory, or in Claude Code with `/plugin install compact-ready@bablobanov` from the same marketplace.
 
 ## Context words
 
@@ -66,7 +72,7 @@ The mod reads the text of your messages only to recognise the two words and the 
 
 ## How it was tested
 
-Its tests run against the engine itself (`claude plugin test`): the two words sent as whole messages and inside a sentence; the hint bands at three quarters and nine tenths of the auto-compaction point, with and without auto-compaction; the focus taken only from the turn that ran `/compact-ready`, with decoy blocks, long lines and odd characters; a message typed while a long turn runs; a request that the engine never carried out; a session resumed after a compaction; the engine restarted right after the word, as Cowork does. Headless Claude Code sessions with both plugins loaded: the `/compact-ready` call prints the block with the word, `context-left` answers with the figures, a word inside a sentence does nothing, `context-compact` compacts with the handoff's focus, and the next message names the handoff. An interactive terminal session with both plugins: the hint bands, the word with its focus, an automatic compaction with its note, a resumed session without one. A Cowork task with both plugins: `context-left` with the figures, the three-line block of `/compact-ready` and two calls in a row, `context-compact` and the next message naming the handoff, the word inside a sentence doing nothing, and the task closed and opened again after the word.
+Its tests run against the engine itself (`claude plugin test`): the two words sent as whole messages and inside a sentence; the hint bands at three quarters and nine tenths of the auto-compaction point, with and without auto-compaction; the focus taken only from the turn that ran `/compact-ready`, with decoy blocks, long lines and odd characters; a message typed while a long turn runs; a request that the engine never carried out; a session resumed after a compaction; the engine restarted right after the word, as Cowork does. Headless Claude Code sessions with both plugins loaded: the `/compact-ready` call prints the block with the word, `context-left` answers with the figures, a word inside a sentence does nothing, `context-compact` compacts with the handoff's focus, and the next message names the handoff. An interactive terminal session with both plugins: the hint bands, the word with its focus, an automatic compaction with its note, a resumed session without one. A Cowork task with both plugins: `context-left` with the figures, the three-line block of `/compact-ready` and two calls in a row, `context-compact` and the next message naming the handoff, the word inside a sentence doing nothing, and the task closed and opened again after the word. A Cowork task with the add-on added from the marketplace `bablobanov/compact-ready` (the Claude desktop app 4.23118.0 on Windows): `context-left` answered in a new task without a restart, then `/compact-ready` printed the block, `context-compact` compacted, and the next message named the handoff.
 
 ## License
 
