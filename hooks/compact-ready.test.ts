@@ -782,6 +782,27 @@ test('L5 the standby note and the skill note after a compaction read one minute 
   expect(skillNote).not.toContain('1 minutes')
 })
 
+test('L6 one turn reads in the singular in the notes and in the focus for the engine, two turns in the plural', async ($, on) => {
+  const h = harness($, on)
+  await start($)
+  await skillTurn($, ccAnswer())
+  await submit($, 'one')
+  await turn($, 'one')
+  const n = note(await ctx($, 'context-compact'), COMPACT_W)
+  expect(n).toContain('(1 turn ago) as its focus')
+  await turn($, 'context-compact')
+  const args = h.runs.filter((e) => e.command === 'compact')[0]?.args ?? ''
+  expect(args).toContain('(handoff from 1 turn before this compaction;')
+  h.usage('none')
+  expect(note(await ctx($, 'next'), AFTER)).toContain(', 1 turn before the compaction;')
+  await skillTurn($, ccAnswer())
+  await submit($, 'two')
+  await turn($, 'two')
+  await submit($, 'three')
+  await turn($, 'three')
+  expect(note(await ctx($, 'context-compact'), COMPACT_W)).toContain('(2 turns ago) as its focus')
+})
+
 // ---------- H: the hint bands ----------
 
 test('H1 half of the window gets no note', async ($, on) => {
