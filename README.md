@@ -6,7 +6,7 @@ It is made for Claude Code and for Cowork, which uses the same agentic architect
 
 ## Install
 
-Compact Ready Context was submitted to the Claude plugin directory on 7 November 2026. The directory lists a mod for Claude Code, so in Cowork the add-on is installed from the marketplace in the Compact Ready repository, `bablobanov/compact-ready`; the same marketplace works in Claude Code.
+The Claude plugin directory accepts mods only from Verified organizations, so the add-on is installed from the marketplace in the Compact Ready repository, `bablobanov/compact-ready`, in Claude Code and in Cowork alike.
 
 **In Claude Code:**
 
